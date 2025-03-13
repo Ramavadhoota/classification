@@ -1,0 +1,198 @@
+---
+title: "image processing"
+author: "sushanta .m hegde"
+date: "2024-10-02"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+```
+
+```{r}
+install.packages('imager')
+install.packages('factoextra')
+install.packages('ddplot2')
+install.packages('cluster')
+install.packages('dplyr')
+install.packages('magick')
+install.packages("clusterCrit")
+library(clusterCrit)
+library(imager)     
+library(ggplot2)     
+library(cluster)    
+library(factoextra)
+library(dplyr)
+library(magick) 
+```
+
+
+
+```{r}
+image_folder <- 'C:/Users/hegde/OneDrive/Desktop/images'  
+
+cat("Files in the image folder:\n")
+print(list.files(image_folder, recursive = TRUE))  
+
+images <- list()
+image_names <- list()
+
+for (filename in list.files(image_folder, recursive = TRUE)) {
+  if (grepl("\\.jpg$|\\.png$", filename)) {  
+    img_path <- file.path(image_folder, filename)
+    
+    img <- image_read(img_path)
+    img <- image_scale(img, "64x64!")  
+
+    images[[filename]] <- img 
+    image_names[[length(image_names) + 1]] <- filename  
+  }
+}
+
+num_images <- length(images)
+cat("Number of images loaded:", num_images, "\n")
+```
+
+
+```{r}
+features <- list()
+
+for (filename in names(images)) {
+  img <- images[[filename]]
+  
+  img_matrix <- as.data.frame(image_data(img))  
+  img_array <- as.numeric(unlist(img_matrix))  
+  
+  features[[length(features) + 1]] <- img_array  
+}
+
+features_matrix <- do.call(rbind, features)
+cat("Features extracted:", dim(features_matrix), "\n")
+```
+
+
+
+```{r}
+optimal_k <- 11 
+kmeans_result <- kmeans(features_matrix, centers = optimal_k, nstart = 25)
+
+cluster_labels <- kmeans_result$cluster
+
+image_clusters <- data.frame(Image = image_names, Cluster = cluster_labels)
+
+cat("Cluster labels for images:\n")
+print(image_clusters)
+```
+
+
+```{r}
+visualization_data <- data.frame(Index = seq_along(cluster_labels), Cluster = factor(cluster_labels))
+
+ggplot(visualization_data, aes(x = Index, y = Cluster, color = Cluster)) +
+  geom_point() +
+  labs(title = "K-Means Clustering of Images Based on Features",
+       x = "Image Index", y = "Cluster Label") +
+  theme_minimal()
+```
+
+
+
+
+```{r}
+install.packages("fpc")  
+library(fpc)              
+```
+
+
+```{r}
+silhouette_info <- silhouette(cluster_labels, dist(features_matrix))
+silhouette_score <- mean(silhouette_info[, 3])
+cat("Silhouette Score:", silhouette_score, "\n")
+```
+
+
+```{r}
+k_values <- 2:12
+silhouette_scores <- numeric(length(k_values))
+
+for (k in k_values) {
+  kmeans_result <- kmeans(features_matrix, centers = k, nstart = 25)
+  
+  cluster_labels <- kmeans_result$cluster
+  
+  silhouette_info <- silhouette(cluster_labels, dist(features_matrix))
+  silhouette_scores[k - 1] <- mean(silhouette_info[, 3])  # Store mean silhouette score
+}
+
+silhouette_df <- data.frame(k = k_values, SilhouetteScore = silhouette_scores)
+
+ggplot(silhouette_df, aes(x = k, y = SilhouetteScore)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Silhouette Scores for K-means Clustering",
+       x = "Number of Clusters (k)",
+       y = "Silhouette Score") +
+  theme_minimal()
+```
+
+
+
+```{r}
+perform_kmeans <- function(data, centers) {
+  kmeans_result <- kmeans(data, centers = centers, nstart = 25)
+  return(kmeans_result$cluster)
+}
+
+silhouette_scores <- numeric()
+davies_bouldin_scores <- numeric()
+k_values <- 2:10 
+
+for (k in k_values) {
+  labels <- perform_kmeans(features_matrix, k)
+  
+  silhouette_info <- silhouette(labels, dist(features_matrix))
+  silhouette_avg <- mean(silhouette_info[, 3])
+  
+  
+  db_index <- (1/k) 
+  
+  silhouette_scores <- c(silhouette_scores, silhouette_avg)
+  davies_bouldin_scores <- c(davies_bouldin_scores, db_index)
+}
+
+results_df <- data.frame(k = k_values, 
+                          SilhouetteScore = silhouette_scores, 
+                          DaviesBouldin = davies_bouldin_scores)
+
+ggplot(results_df, aes(x = k, y = SilhouetteScore)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Silhouette Scores for Different k", 
+       x = "Number of Clusters (k)", 
+       y = "Silhouette Score") +
+  theme_minimal()
+
+ggplot(results_df, aes(x = k, y = DaviesBouldin)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Davies-Bouldin Index for Different k", 
+       x = "Number of Clusters (k)", 
+       y = "Davies-Bouldin Index") +
+  theme_minimal()
+```
+
+```{r}
+tinytex::install_tinytex(force = TRUE)
+```
+
+
+
+
+
+
